@@ -1,20 +1,20 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2026 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
@@ -23,10 +23,11 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "app.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
+typedef StaticTask_t osStaticThreadDef_t;
 /* USER CODE BEGIN PTD */
 
 /* USER CODE END PTD */
@@ -50,10 +51,67 @@ PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
+uint32_t defaultTaskBuffer[ 4096 ];
+osStaticThreadDef_t defaultTaskControlBlock;
 const osThreadAttr_t defaultTask_attributes = {
   .name = "defaultTask",
-  .stack_size = 128 * 4,
+  .cb_mem = &defaultTaskControlBlock,
+  .cb_size = sizeof(defaultTaskControlBlock),
+  .stack_mem = &defaultTaskBuffer[0],
+  .stack_size = sizeof(defaultTaskBuffer),
   .priority = (osPriority_t) osPriorityNormal,
+};
+/* Definitions for spi2TxTask */
+osThreadId_t spi2TxTaskHandle;
+uint32_t spi2TxTaskBuffer[ 512 ];
+osStaticThreadDef_t spi2TxTaskControlBlock;
+const osThreadAttr_t spi2TxTask_attributes = {
+  .name = "spi2TxTask",
+  .cb_mem = &spi2TxTaskControlBlock,
+  .cb_size = sizeof(spi2TxTaskControlBlock),
+  .stack_mem = &spi2TxTaskBuffer[0],
+  .stack_size = sizeof(spi2TxTaskBuffer),
+  .priority = (osPriority_t) osPriorityAboveNormal,
+};
+/* Definitions for spi2TxQueue */
+osMessageQueueId_t spi2TxQueueHandle;
+const osMessageQueueAttr_t spi2TxQueue_attributes = {
+  .name = "spi2TxQueue"
+};
+/* Definitions for defaultQueue */
+osMessageQueueId_t defaultQueueHandle;
+const osMessageQueueAttr_t defaultQueue_attributes = {
+  .name = "defaultQueue"
+};
+/* Definitions for spi2TxCompletedQueue */
+osMessageQueueId_t spi2TxCompletedQueueHandle;
+const osMessageQueueAttr_t spi2TxCompletedQueue_attributes = {
+  .name = "spi2TxCompletedQueue"
+};
+/* Definitions for lvglTimer */
+osTimerId_t lvglTimerHandle;
+const osTimerAttr_t lvglTimer_attributes = {
+  .name = "lvglTimer"
+};
+/* Definitions for lwipTimer */
+osTimerId_t lwipTimerHandle;
+const osTimerAttr_t lwipTimer_attributes = {
+  .name = "lwipTimer"
+};
+/* Definitions for usbTimer */
+osTimerId_t usbTimerHandle;
+const osTimerAttr_t usbTimer_attributes = {
+  .name = "usbTimer"
+};
+/* Definitions for displayReadyEvent */
+osEventFlagsId_t displayReadyEventHandle;
+const osEventFlagsAttr_t displayReadyEvent_attributes = {
+  .name = "displayReadyEvent"
+};
+/* Definitions for appEvent */
+osEventFlagsId_t appEventHandle;
+const osEventFlagsAttr_t appEvent_attributes = {
+  .name = "appEvent"
 };
 /* USER CODE BEGIN PV */
 
@@ -68,6 +126,10 @@ static void MX_DMA_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_USB_OTG_FS_PCD_Init(void);
 void StartDefaultTask(void *argument);
+extern void StartSpi2TxTask(void *argument);
+extern void lvglTimerCallback(void *argument);
+extern void lwipTimerCallback(void *argument);
+extern void usbTimerCallback(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -139,9 +201,29 @@ int main(void)
   /* add semaphores, ... */
   /* USER CODE END RTOS_SEMAPHORES */
 
+  /* Create the timer(s) */
+  /* creation of lvglTimer */
+  lvglTimerHandle = osTimerNew(lvglTimerCallback, osTimerPeriodic, NULL, &lvglTimer_attributes);
+
+  /* creation of lwipTimer */
+  lwipTimerHandle = osTimerNew(lwipTimerCallback, osTimerPeriodic, NULL, &lwipTimer_attributes);
+
+  /* creation of usbTimer */
+  usbTimerHandle = osTimerNew(usbTimerCallback, osTimerOnce, NULL, &usbTimer_attributes);
+
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
+
+  /* Create the queue(s) */
+  /* creation of spi2TxQueue */
+  spi2TxQueueHandle = osMessageQueueNew (1, sizeof(EventTask_t), &spi2TxQueue_attributes);
+
+  /* creation of defaultQueue */
+  defaultQueueHandle = osMessageQueueNew (16, sizeof(EventTask_t), &defaultQueue_attributes);
+
+  /* creation of spi2TxCompletedQueue */
+  spi2TxCompletedQueueHandle = osMessageQueueNew (1, sizeof(uint32_t), &spi2TxCompletedQueue_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
@@ -151,9 +233,19 @@ int main(void)
   /* creation of defaultTask */
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
+  /* creation of spi2TxTask */
+  spi2TxTaskHandle = osThreadNew(StartSpi2TxTask, NULL, &spi2TxTask_attributes);
+
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
+
+  /* Create the event(s) */
+  /* creation of displayReadyEvent */
+  displayReadyEventHandle = osEventFlagsNew(&displayReadyEvent_attributes);
+
+  /* creation of appEvent */
+  appEventHandle = osEventFlagsNew(&appEvent_attributes);
 
   /* USER CODE BEGIN RTOS_EVENTS */
   /* add events, ... */
@@ -166,8 +258,7 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
+  while (1) {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -190,7 +281,7 @@ void SystemClock_Config(void)
 
   /** Configure the main internal regulator output voltage
   */
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE0);
 
   while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
 
@@ -201,7 +292,16 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSIState = RCC_HSI_DIV1;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.HSI48State = RCC_HSI48_ON;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLM = 4;
+  RCC_OscInitStruct.PLL.PLLN = 30;
+  RCC_OscInitStruct.PLL.PLLP = 2;
+  RCC_OscInitStruct.PLL.PLLQ = 3;
+  RCC_OscInitStruct.PLL.PLLR = 2;
+  RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1VCIRANGE_3;
+  RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1VCOWIDE;
+  RCC_OscInitStruct.PLL.PLLFRACN = 0;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -212,15 +312,15 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2
                               |RCC_CLOCKTYPE_D3PCLK1|RCC_CLOCKTYPE_D1PCLK1;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.SYSCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV1;
-  RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_APB1_DIV1;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV1;
-  RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV1;
+  RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV2;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_APB1_DIV2;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV2;
+  RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
   {
     Error_Handler();
   }
@@ -263,7 +363,7 @@ static void MX_SPI2_Init(void)
   hspi2.Instance = SPI2;
   hspi2.Init.Mode = SPI_MODE_MASTER;
   hspi2.Init.Direction = SPI_DIRECTION_1LINE;
-  hspi2.Init.DataSize = SPI_DATASIZE_4BIT;
+  hspi2.Init.DataSize = SPI_DATASIZE_8BIT;
   hspi2.Init.CLKPolarity = SPI_POLARITY_HIGH;
   hspi2.Init.CLKPhase = SPI_PHASE_2EDGE;
   hspi2.Init.NSS = SPI_NSS_SOFT;
@@ -417,14 +517,14 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pin = LED_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : BLK_Pin DC_Pin CS_Pin */
   GPIO_InitStruct.Pin = BLK_Pin|DC_Pin|CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PB2 PB10 PB11 PB3
@@ -463,17 +563,18 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN Header_StartDefaultTask */
 /**
-  * @brief  Function implementing the defaultTask thread.
-  * @param  argument: Not used
-  * @retval None
-  */
+ * @brief  Function implementing the defaultTask thread.
+ * @param  argument: Not used
+ * @retval None
+ */
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN 5 */
+  AppContext_t context = {};
+  run_app(&context);
   /* Infinite loop */
-  for(;;)
-  {
+  for (;;) {
     osDelay(1);
   }
   /* USER CODE END 5 */
@@ -572,8 +673,7 @@ void Error_Handler(void)
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
-  while (1)
-  {
+  while (1) {
   }
   /* USER CODE END Error_Handler_Debug */
 }
@@ -588,8 +688,9 @@ void Error_Handler(void)
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+  /* User can add his own implementation to report the file name and line
+     number, ex: printf("Wrong parameters value: file %s on line %d\r\n", file,
+     line) */
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */

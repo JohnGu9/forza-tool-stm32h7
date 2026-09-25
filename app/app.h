@@ -1,0 +1,36 @@
+#ifndef APP_H
+#define APP_H
+
+#include "cmsis_os2.h"
+
+#include "common.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct {
+} AppContext_t;
+
+extern osMessageQueueId_t defaultQueueHandle;
+extern osTimerId_t lvglTimerHandle;
+extern osTimerId_t lwipTimerHandle;
+extern osTimerId_t usbTimerHandle;
+
+extern osEventFlagsId_t appEventHandle;
+#define APP_EVENT_NORMAL (1U << 0)
+#define APP_EVENT_USB (1U << 1)
+#define APP_EVENT_LVGL (1U << 2) // UNUSED
+#define APP_EVENT_LWIP (1U << 3)
+
+#define APP_EVENT_ALL                                                          \
+  APP_EVENT_NORMAL | APP_EVENT_USB | APP_EVENT_LVGL | APP_EVENT_LWIP
+
+void run_app(const AppContext_t *context);
+void schedule_task_on_main_thread(const EventTask_t *task);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

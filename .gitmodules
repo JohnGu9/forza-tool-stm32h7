@@ -1,0 +1,9 @@
+[submodule "app/lvgl"]
+	path = app/lvgl
+	url = https://github.com/lvgl/lvgl.git
+[submodule "app/lwip"]
+	path = app/lwip
+	url = https://github.com/lwip-tcpip/lwip.git
+[submodule "app/tinyusb"]
+	path = app/tinyusb
+	url = https://github.com/hathach/tinyusb.git
