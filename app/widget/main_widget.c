@@ -37,7 +37,7 @@ static void *init_state(mContext_t *context) {
 
   state.link_state_change_task.callback = &link_state_change_task_callback;
   state.link_state_change_task.context = &state;
-  add_link_state_listener(&state.link_state_change_task);
+  add_task(&link_state_listeners, &state.link_state_change_task);
 
   return &state;
 }
@@ -66,7 +66,7 @@ static void build(mContext_t *context, mWidget_t children[MF_MAX_CHILDREN]) {
 static void dispose(mContext_t *context) {
   m_get_state_cast(state, context, MainWidgetState_t);
 
-  remove_link_state_listener(&state->link_state_change_task);
+  remove_task(&link_state_listeners, &state->link_state_change_task);
   lv_anim_timeline_delete(state->anim_timeline);
 
   state->anim_timeline = NULL;

@@ -327,73 +327,24 @@ void sys_arch_unprotect(sys_prot_t pval) { (void)pval; }
 
 uint32_t sys_now(void) { return HAL_GetTick(); }
 
-static EventTaskSet_t k1_listeners;
-
-int32_t add_k1_listener(EventTask_t *task) {
-  return !insert(&k1_listeners, (uintptr_t)task);
-}
-
-int32_t remove_k1_listener(EventTask_t *task) {
-  erase(&k1_listeners, (uintptr_t)task);
-  return 0;
-}
-
-void notify_k1_listener() {
-  for_each(&k1_listeners, el) {
-    EventTask_t *task = (EventTask_t *)(*el);
-    task->callback(task->context);
-  }
-}
-
-static EventTaskSet_t k2_listeners;
-
-int32_t add_k2_listener(EventTask_t *task) {
-  return !insert(&k2_listeners, (uintptr_t)task);
-}
-
-int32_t remove_k2_listener(EventTask_t *task) {
-  erase(&k2_listeners, (uintptr_t)task);
-  return 0;
-}
-
-void notify_k2_listener() {
-  for_each(&k2_listeners, el) {
-    EventTask_t *task = (EventTask_t *)(*el);
-    task->callback(task->context);
-  }
-}
+EventTaskSet_t k1_listeners;
+EventTaskSet_t k2_listeners;
+EventTaskSet_t link_state_listeners;
 
 static bool is_link_up = false;
-
-static EventTaskSet_t link_state_listeners;
-
-int32_t add_link_state_listener(EventTask_t *task) {
-  return !insert(&link_state_listeners, (uintptr_t)task);
-}
-
-int32_t remove_link_state_listener(EventTask_t *task) {
-  erase(&link_state_listeners, (uintptr_t)task);
-  return 0;
-}
 
 bool is_link_state_up() { return is_link_up; }
 
 // Invoked when device is mounted
 void tud_mount_cb(void) {
   is_link_up = true;
-  for_each(&link_state_listeners, el) {
-    EventTask_t *task = (EventTask_t *)(*el);
-    task->callback(task->context);
-  }
+  invoke_tasks(&link_state_listeners);
 }
 
 // Invoked when device is unmounted
 void tud_umount_cb(void) {
   is_link_up = false;
-  for_each(&link_state_listeners, el) {
-    EventTask_t *task = (EventTask_t *)(*el);
-    task->callback(task->context);
-  }
+  invoke_tasks(&link_state_listeners);
 }
 
 // Invoked when usb bus is suspended
@@ -402,19 +353,13 @@ void tud_umount_cb(void) {
 void tud_suspend_cb(bool remote_wakeup_en) {
   (void)remote_wakeup_en;
   is_link_up = false;
-  for_each(&link_state_listeners, el) {
-    EventTask_t *task = (EventTask_t *)(*el);
-    task->callback(task->context);
-  }
+  invoke_tasks(&link_state_listeners);
 }
 
 // Invoked when usb bus is resumed
 void tud_resume_cb(void) {
   is_link_up = true;
-  for_each(&link_state_listeners, el) {
-    EventTask_t *task = (EventTask_t *)(*el);
-    task->callback(task->context);
-  }
+  invoke_tasks(&link_state_listeners);
 }
 
 void handle_otg_irq() {
@@ -460,4 +405,11 @@ void init_io() {
   // spi2TxTask handle the display init task, just wait for the completed event
   osEventFlagsWait(displayReadyEventHandle, 1U, osFlagsWaitAny, osWaitForever);
   osEventFlagsDelete(displayReadyEventHandle);
+}
+
+void deinit_io() {
+  tusb_deinit(BOARD_TUD_RHPORT);
+  cleanup(&link_state_listeners);
+  cleanup(&k1_listeners);
+  cleanup(&k2_listeners);
 }

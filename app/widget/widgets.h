@@ -21,6 +21,8 @@ extern const mWidgetClass_t TachometerLedControllerWidgetClass;
 
 extern const mWidgetClass_t ControlInfoWidgetClass;
 
+extern const mWidgetClass_t GForceWidgetClass;
+
 #include "common.h"
 
 #include <lvgl.h>
@@ -91,6 +93,7 @@ typedef struct {
   CircularBuffer_t *circular_buffer;
   DataAnalysis_t *data_analysis;
   DataRecvTask_t recv_task;
+  EventTaskSet_t data_recv_listeners;
   EventTask_t k1_listener;
   EventTask_t k2_listener;
   AnimatedTransitionWidgetData_t animated_transition_widget_data;

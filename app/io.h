@@ -16,20 +16,16 @@ extern osEventFlagsId_t displayReadyEventHandle;
 extern lv_display_t *display;
 
 void init_io();
+void deinit_io();
 
 // only call in irq
 void handle_otg_irq();
 
-int32_t add_link_state_listener(EventTask_t *task);
-int32_t remove_link_state_listener(EventTask_t *task);
+extern EventTaskSet_t k1_listeners;
+extern EventTaskSet_t k2_listeners;
+
+extern EventTaskSet_t link_state_listeners;
 bool is_link_state_up();
 
-int32_t add_k1_listener(EventTask_t *task);
-int32_t remove_k1_listener(EventTask_t *task);
-void notify_k1_listener();
-
-int32_t add_k2_listener(EventTask_t *task);
-int32_t remove_k2_listener(EventTask_t *task);
-void notify_k2_listener();
 
 #endif

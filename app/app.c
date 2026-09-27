@@ -87,6 +87,9 @@ void run_app(const AppContext_t *context) {
       }
     }
   }
+
+  m_detach(&widget_context);
+  deinit_io();
 }
 
 size_t board_usb_get_serial(uint16_t id[], size_t max_len) {
@@ -120,7 +123,7 @@ void lwipTimerCallback(void *argument) {
   osEventFlagsSet(appEventHandle, APP_EVENT_LWIP);
 }
 
-static void k1_async(void *context) { notify_k1_listener(); }
+static void k1_async(void *context) { invoke_tasks(&k1_listeners); }
 
 void k1TimerCallback(void *argument) {
   GPIO_PinState state = HAL_GPIO_ReadPin(K1_GPIO_Port, K1_Pin);
@@ -133,7 +136,7 @@ void k1TimerCallback(void *argument) {
   }
 }
 
-static void k2_async(void *context) { notify_k2_listener(); }
+static void k2_async(void *context) { invoke_tasks(&k2_listeners); }
 
 void k2TimerCallback(void *argument) {
   GPIO_PinState state = HAL_GPIO_ReadPin(K2_GPIO_Port, K2_Pin);

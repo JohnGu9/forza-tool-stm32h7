@@ -243,6 +243,7 @@ static void data_recv_callback(void *context, struct pbuf *p) {
     memcpy(data_packet->buffer, p->payload, p->len);
     data_packet->length = p->len;
     analysis_data(state->data_analysis, state->circular_buffer);
+    invoke_tasks(&state->data_recv_listeners);
     state->is_dirty = true;
     const EventTask_t task = {
         .callback = &set_state_async,
@@ -264,6 +265,7 @@ static void on_k2(void *context) {
 typedef enum {
   ChildType_Tachometer,
   ChildType_ControlInfo,
+  ChildType_GForce,
 } ChildType_t;
 
 static ChildType_t get_next_key2(ChildType_t current) {
@@ -271,6 +273,8 @@ static ChildType_t get_next_key2(ChildType_t current) {
   case ChildType_Tachometer:
     return ChildType_ControlInfo;
   case ChildType_ControlInfo:
+    return ChildType_GForce;
+  case ChildType_GForce:
   default:
     return ChildType_Tachometer;
   }
@@ -283,7 +287,8 @@ static void on_k1(void *context) {
 }
 
 static void build_children(LinkUpWidgetState_t *const state) {
-  uint32_t key = (uint32_t)(state->refresh_key) << 16 | (uint16_t)(state->child_type_key);
+  uint32_t key =
+      (uint32_t)(state->refresh_key) << 16 | (uint16_t)(state->child_type_key);
   switch (state->child_type_key) {
   case ChildType_ControlInfo: {
     state->animated_transition_widget_data = (AnimatedTransitionWidgetData_t){
@@ -293,6 +298,23 @@ static void build_children(LinkUpWidgetState_t *const state) {
             {
                 {
                     .class = &ControlInfoWidgetClass,
+                    .data = state,
+                },
+                NullWidget,
+                NullWidget,
+                NullWidget,
+            },
+    };
+    break;
+  }
+  case ChildType_GForce: {
+    state->animated_transition_widget_data = (AnimatedTransitionWidgetData_t){
+        .div = state->div,
+        .key = key,
+        .children =
+            {
+                {
+                    .class = &GForceWidgetClass,
                     .data = state,
                 },
                 NullWidget,
@@ -358,17 +380,20 @@ static void *init_state(mContext_t *context) {
       .callback = &on_k1,
       .context = &state,
   };
-  add_k1_listener(&state.k1_listener);
+  add_task(&k1_listeners, &state.k1_listener);
+
   state.k2_listener = (EventTask_t){
       .callback = &on_k2,
       .context = &state,
   };
-  add_k2_listener(&state.k2_listener);
+  add_task(&k2_listeners, &state.k2_listener);
 
   state.recv_task = (DataRecvTask_t){
       .callback = &data_recv_callback,
       .context = &state,
   };
+  init(&state.data_recv_listeners);
+
   state.circular_buffer = &circular_buffer;
   state.data_analysis = &data_analysis;
   state.context = context;
@@ -402,10 +427,11 @@ static void build(mContext_t *context, mWidget_t children[MF_MAX_CHILDREN]) {
 
 static void dispose(mContext_t *context) {
   m_get_state_cast(state, context, LinkUpWidgetState_t);
-  remove_k2_listener(&state->k2_listener);
-  remove_k1_listener(&state->k1_listener);
+  remove_task(&k2_listeners, &state->k2_listener);
+  remove_task(&k1_listeners, &state->k1_listener);
   lv_anim_del(state->div, NULL);
   lv_obj_del(state->div);
+  cleanup(&state->data_recv_listeners);
   state->div = NULL;
   state->context = NULL;
   state->circular_buffer = NULL;

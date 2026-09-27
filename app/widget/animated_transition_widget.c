@@ -3,8 +3,7 @@
 #include "common.h"
 
 #include <assert.h>
-#include <lvgl/core/lv_anim.h>
-#include <lvgl/core/lv_obj_style_gen.h>
+#include <lvgl/core/lv_obj_pos.h>
 
 // @TODO: more style
 
@@ -22,9 +21,11 @@ typedef struct {
   mWidget_t children[MF_MAX_CHILDREN];
 } AnimatedTransitionWidgetState_t;
 
-static void exit_anim_callback(void *var, int32_t v) { // v = 255 -> 0
+static void exit_anim_callback(void *var, int32_t v) { // v = 0 -> 1000
   lv_obj_t *const div = (lv_obj_t *)var;
-  lv_obj_set_style_translate_x(div, v, LV_PART_MAIN);
+  float progress = (float)v / 1000.0;
+  lv_obj_set_style_translate_x(div, progress * lv_obj_get_width(div),
+                               LV_PART_MAIN);
 }
 
 static void on_exited(lv_anim_t *var) {
@@ -35,9 +36,11 @@ static void on_exited(lv_anim_t *var) {
   m_set_state(state->context);
 }
 
-static void enter_anim_callback(void *var, int32_t v) { // v = 0 -> 255
+static void enter_anim_callback(void *var, int32_t v) { // v = 0 -> 1000
   lv_obj_t *const div = (lv_obj_t *)var;
-  lv_obj_set_style_translate_x(div, v, LV_PART_MAIN);
+  float progress = (float)v / 1000.0;
+  lv_obj_set_style_translate_x(div, -(1 - progress) * lv_obj_get_width(div),
+                               LV_PART_MAIN);
 }
 
 static void on_entered(lv_anim_t *var) {
@@ -76,7 +79,7 @@ static void build(mContext_t *context, mWidget_t children[MF_MAX_CHILDREN]) {
     lv_anim_t enter_anim;
     lv_anim_init(&enter_anim);
     lv_anim_set_var(&enter_anim, data->div);
-    lv_anim_set_values(&enter_anim, -lv_obj_get_width(data->div), 0);
+    lv_anim_set_values(&enter_anim, 0, 1000);
     lv_anim_set_exec_cb(&enter_anim, enter_anim_callback);
     lv_anim_set_path_cb(&enter_anim, lv_anim_path_ease_in);
     lv_anim_set_duration(&enter_anim, 200);
@@ -95,10 +98,10 @@ static void build(mContext_t *context, mWidget_t children[MF_MAX_CHILDREN]) {
       lv_anim_t exit_anim;
       lv_anim_init(&exit_anim);
       lv_anim_set_var(&exit_anim, data->div);
-      lv_anim_set_values(&exit_anim, 0, lv_obj_get_width(data->div));
+      lv_anim_set_values(&exit_anim, 0, 1000);
       lv_anim_set_exec_cb(&exit_anim, exit_anim_callback);
       lv_anim_set_path_cb(&exit_anim, lv_anim_path_ease_out);
-      lv_anim_set_duration(&exit_anim, 120);
+      lv_anim_set_duration(&exit_anim, 100);
       lv_anim_set_completed_cb(&exit_anim, on_exited);
       lv_anim_start(&exit_anim);
       state->state = Exiting;

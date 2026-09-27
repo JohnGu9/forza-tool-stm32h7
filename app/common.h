@@ -20,6 +20,9 @@ typedef struct {
 } EventTask_t;
 
 typedef set(uintptr_t) EventTaskSet_t;
+int32_t add_task(EventTaskSet_t *set, EventTask_t *task);
+int32_t remove_task(EventTaskSet_t *set, EventTask_t *task);
+void invoke_tasks(EventTaskSet_t *set);
 
 #define new_object(T) (T *)calloc(1, sizeof(T))
 #define delete_object(obj) free(obj)
@@ -175,7 +178,7 @@ typedef struct {
   // Current gear
   uint8_t Gear;
   // Steering input (-127 = full left, 0 = center, 127 = full right)
-  uint8_t Steer;
+  int8_t Steer;
   // Normalized driving line position (-127 to 127)
   uint8_t NormalizedDrivingLine;
   // Normalized AI braking difference (-127 to 127)

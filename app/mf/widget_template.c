@@ -5,7 +5,7 @@ typedef struct {
 } MyWidgetState_t;
 
 static void *init_state(mContext_t *context) {
-  MyWidgetState_t *state = (MyWidgetState_t *)malloc(sizeof(MyWidgetState_t));
+  MyWidgetState_t *const state = (MyWidgetState_t *)malloc(sizeof(MyWidgetState_t));
   return state;
 }
 

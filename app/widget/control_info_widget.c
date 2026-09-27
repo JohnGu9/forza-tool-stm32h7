@@ -3,6 +3,7 @@
 #include "widgets.h"
 #include <assert.h>
 #include <lvgl.h>
+#include <lvgl/draw/lv_palette.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -17,6 +18,8 @@ static void reset_data(ControlInfoWidgetState_t *const state) {
   lv_bar_set_value(state->bar_accel, 0, false);
   lv_bar_set_value(state->bar_brake, 0, false);
   lv_bar_set_value(state->bar_power_level, 0, false);
+  lv_obj_set_style_bg_color(state->bar_power_level,
+                            lv_palette_main(LV_PALETTE_BLUE), LV_PART_INDICATOR);
   lv_label_set_text(state->label_power_level, "Power: 0%");
 }
 
@@ -44,6 +47,16 @@ static void set_data(ControlInfoWidgetState_t *const state,
   float power_level = max_power == 0 ? 0 : dash->Power / max_power;
 
   lv_bar_set_value(state->bar_power_level, 0xFF * power_level, false);
+  if (power_level > 0.97) {
+    lv_obj_set_style_bg_color(state->bar_power_level,
+                              lv_palette_main(LV_PALETTE_GREEN), LV_PART_INDICATOR);
+  } else if (power_level < 0.8 && dash->Accel == 0xFF) {
+    lv_obj_set_style_bg_color(state->bar_power_level,
+                              lv_palette_main(LV_PALETTE_RED), LV_PART_INDICATOR);
+  } else {
+    lv_obj_set_style_bg_color(state->bar_power_level,
+                              lv_palette_main(LV_PALETTE_BLUE), LV_PART_INDICATOR);
+  }
   lv_label_set_text_fmt(state->label_power_level, "Power: %d%%",
                         (int)(power_level * 100));
 }
@@ -51,9 +64,6 @@ static void set_data(ControlInfoWidgetState_t *const state,
 static void *init_state(mContext_t *context) {
   ControlInfoWidgetState_t *const state = new_object(ControlInfoWidgetState_t);
   m_get_widget_data_cast(data, context, LinkUpWidgetState_t);
-  m_get_state_from_inherited_widget_class_cast(
-      inherited_widget_state, context, &LinkUpWidgetClass, LinkUpWidgetState_t);
-  assert(inherited_widget_state == data);
 
   lv_obj_t *bar_accel = lv_bar_create(data->div);
   state->bar_accel = bar_accel;
