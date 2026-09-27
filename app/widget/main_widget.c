@@ -42,10 +42,8 @@ static void *init_state(mContext_t *context) {
   return &state;
 }
 
-static void build(mContext_t *context, void *_state,
-                  const mWidget_t *children[MF_MAX_CHILDREN],
-                  const void *children_widget_data[MF_MAX_CHILDREN]) {
-  MainWidgetState_t *state = (MainWidgetState_t *)_state;
+static void build(mContext_t *context, mWidget_t children[MF_MAX_CHILDREN]) {
+  m_get_state_cast(state, context, MainWidgetState_t);
   bool is_link_up = is_link_state_up();
   if (is_link_up != state->is_link_state_up) {
     lv_anim_timeline_set_reverse(state->anim_timeline, !is_link_up);
@@ -53,19 +51,21 @@ static void build(mContext_t *context, void *_state,
     state->is_link_state_up = is_link_up;
   }
 
-  children[0] = &LinkUpWidget;
-  children_widget_data[0] = state;
-
-  children[1] = &LinkDownWidget;
-  children_widget_data[1] = state;
+  children[0] = (mWidget_t){
+      .class = &LinkUpWidgetClass,
+      .data = state,
+  };
+  children[1] = (mWidget_t){
+      .class = &LinkDownWidgetClass,
+      .data = state,
+  };
 
   return;
 }
 
-static void dispose(mContext_t *context, void *_state) {
-  MainWidgetState_t *state = (MainWidgetState_t *)_state;
+static void dispose(mContext_t *context) {
+  m_get_state_cast(state, context, MainWidgetState_t);
 
-  assert_param(state->screen != NULL);
   remove_link_state_listener(&state->link_state_change_task);
   lv_anim_timeline_delete(state->anim_timeline);
 
@@ -75,7 +75,7 @@ static void dispose(mContext_t *context, void *_state) {
   return;
 };
 
-WIDGET_MEMORY_LOCATION const mWidget_t MainWidget = {
+const mWidgetClass_t MainWidgetClass = {
     .init_state = &init_state,
     .build = &build,
     .dispose = &dispose,

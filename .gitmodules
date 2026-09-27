@@ -7,3 +7,6 @@
 [submodule "app/tinyusb"]
 	path = app/tinyusb
 	url = https://github.com/hathach/tinyusb.git
+[submodule "app/CC"]
+	path = app/CC
+	url = https://github.com/JacksonAllan/CC.git

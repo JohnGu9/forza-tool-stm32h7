@@ -103,6 +103,16 @@ osTimerId_t usbTimerHandle;
 const osTimerAttr_t usbTimer_attributes = {
   .name = "usbTimer"
 };
+/* Definitions for k1Timer */
+osTimerId_t k1TimerHandle;
+const osTimerAttr_t k1Timer_attributes = {
+  .name = "k1Timer"
+};
+/* Definitions for k2Timer */
+osTimerId_t k2TimerHandle;
+const osTimerAttr_t k2Timer_attributes = {
+  .name = "k2Timer"
+};
 /* Definitions for displayReadyEvent */
 osEventFlagsId_t displayReadyEventHandle;
 const osEventFlagsAttr_t displayReadyEvent_attributes = {
@@ -130,6 +140,8 @@ extern void StartSpi2TxTask(void *argument);
 extern void lvglTimerCallback(void *argument);
 extern void lwipTimerCallback(void *argument);
 extern void usbTimerCallback(void *argument);
+extern void k1TimerCallback(void *argument);
+extern void k2TimerCallback(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -211,6 +223,12 @@ int main(void)
   /* creation of usbTimer */
   usbTimerHandle = osTimerNew(usbTimerCallback, osTimerOnce, NULL, &usbTimer_attributes);
 
+  /* creation of k1Timer */
+  k1TimerHandle = osTimerNew(k1TimerCallback, osTimerOnce, NULL, &k1Timer_attributes);
+
+  /* creation of k2Timer */
+  k2TimerHandle = osTimerNew(k2TimerCallback, osTimerOnce, NULL, &k2Timer_attributes);
+
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
@@ -281,7 +299,7 @@ void SystemClock_Config(void)
 
   /** Configure the main internal regulator output voltage
   */
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE0);
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
 
   while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
 
@@ -295,7 +313,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   RCC_OscInitStruct.PLL.PLLM = 4;
-  RCC_OscInitStruct.PLL.PLLN = 30;
+  RCC_OscInitStruct.PLL.PLLN = 25;
   RCC_OscInitStruct.PLL.PLLP = 2;
   RCC_OscInitStruct.PLL.PLLQ = 3;
   RCC_OscInitStruct.PLL.PLLR = 2;
@@ -473,35 +491,35 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_SET);
 
-  /*Configure GPIO pins : PE2 PE3 PE4 PE5
-                           PE6 PE7 PE8 PE9
-                           PE10 PE11 PE12 PE13
-                           PE14 PE15 PE0 PE1 */
-  GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5
-                          |GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9
-                          |GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_13
-                          |GPIO_PIN_14|GPIO_PIN_15|GPIO_PIN_0|GPIO_PIN_1;
+  /*Configure GPIO pins : PE2 PE4 PE5 PE6
+                           PE7 PE8 PE9 PE10
+                           PE11 PE12 PE13 PE14
+                           PE15 PE0 PE1 */
+  GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6
+                          |GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9|GPIO_PIN_10
+                          |GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14
+                          |GPIO_PIN_15|GPIO_PIN_0|GPIO_PIN_1;
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : K1_Pin */
+  GPIO_InitStruct.Pin = K1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(K1_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pins : PC13 PC14 PC15 PC0
                            PC1 PC2 PC3 PC4
-                           PC5 PC6 PC7 PC8
-                           PC9 PC10 PC11 PC12 */
+                           PC6 PC7 PC8 PC9
+                           PC10 PC11 PC12 */
   GPIO_InitStruct.Pin = GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15|GPIO_PIN_0
                           |GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_4
-                          |GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8
-                          |GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12;
+                          |GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9
+                          |GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12;
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : PH0 PH1 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1;
-  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PA0 PA2 PA3 PA4
                            PA5 PA6 PA7 PA8
@@ -519,6 +537,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : K2_Pin */
+  GPIO_InitStruct.Pin = K2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(K2_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : BLK_Pin DC_Pin CS_Pin */
   GPIO_InitStruct.Pin = BLK_Pin|DC_Pin|CS_Pin;
@@ -551,6 +575,13 @@ static void MX_GPIO_Init(void)
 
   /*AnalogSwitch Config */
   HAL_SYSCFG_AnalogSwitchConfig(SYSCFG_SWITCH_PA1, SYSCFG_SWITCH_PA1_CLOSE);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(K1_EXTI_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(K1_EXTI_IRQn);
+
+  HAL_NVIC_SetPriority(K2_EXTI_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(K2_EXTI_IRQn);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 

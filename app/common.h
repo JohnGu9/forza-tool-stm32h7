@@ -1,6 +1,8 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include "cc.h"
+
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -17,11 +19,13 @@ typedef struct {
   void (*callback)(void *context);
 } EventTask_t;
 
-void invoke_tasks(EventTask_t *list[], size_t length);
+typedef set(uintptr_t) EventTaskSet_t;
 
-int32_t add_task(EventTask_t *task, EventTask_t *list[], size_t length);
+#define new_object(T) (T *)calloc(1, sizeof(T))
+#define delete_object(obj) free(obj)
 
-int32_t remove_task(EventTask_t *task, EventTask_t *list[], size_t length);
+#define likely(x)   __builtin_expect(!!(x), 1)
+#define unlikely(x) __builtin_expect(!!(x), 0)
 
 #define STRUCT_PACK __attribute__((__packed__))
 

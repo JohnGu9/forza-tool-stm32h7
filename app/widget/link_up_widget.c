@@ -1,18 +1,19 @@
+#include "animated_transition_widget.h"
 #include "app.h"
 #include "common.h"
-#include "widget/widgets.h"
+#include "io.h"
 #include "widgets.h"
 
 #include "mf.h"
 
 #include <assert.h>
 #include <lvgl.h>
-#include <lvgl/core/lv_obj_pos.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
-static void set_div_pos_y(lv_anim_t *var, int32_t v) {
+static void div_anim_callback(lv_anim_t *var, int32_t v) {
   lv_obj_t *const div = (lv_obj_t *)var->var;
   lv_obj_set_y(div, v);
 }
@@ -253,12 +254,84 @@ static void data_recv_callback(void *context, struct pbuf *p) {
   }
 }
 
+static void on_k2(void *context) {
+  LinkUpWidgetState_t *state = (LinkUpWidgetState_t *)context;
+  clear_data(state);
+  state->refresh_key++;
+  m_set_state(state->context);
+}
+
+typedef enum {
+  ChildType_Tachometer,
+  ChildType_ControlInfo,
+} ChildType_t;
+
+static ChildType_t get_next_key2(ChildType_t current) {
+  switch (current) {
+  case ChildType_Tachometer:
+    return ChildType_ControlInfo;
+  case ChildType_ControlInfo:
+  default:
+    return ChildType_Tachometer;
+  }
+}
+
+static void on_k1(void *context) {
+  LinkUpWidgetState_t *state = (LinkUpWidgetState_t *)context;
+  state->child_type_key = get_next_key2(state->child_type_key);
+  m_set_state(state->context);
+}
+
+static void build_children(LinkUpWidgetState_t *const state) {
+  uint32_t key = (uint32_t)(state->refresh_key) << 16 | (uint16_t)(state->child_type_key);
+  switch (state->child_type_key) {
+  case ChildType_ControlInfo: {
+    state->animated_transition_widget_data = (AnimatedTransitionWidgetData_t){
+        .div = state->div,
+        .key = key,
+        .children =
+            {
+                {
+                    .class = &ControlInfoWidgetClass,
+                    .data = state,
+                },
+                NullWidget,
+                NullWidget,
+                NullWidget,
+            },
+    };
+    break;
+  }
+  case ChildType_Tachometer:
+  default: {
+    state->animated_transition_widget_data = (AnimatedTransitionWidgetData_t){
+        .div = state->div,
+        .key = key,
+        .children =
+            {
+                {
+                    .class = &TachometerLedControllerWidgetClass,
+                    .data = state,
+                },
+                {
+                    .class = &TachometerWidgetClass,
+                    .data = state,
+                },
+                NullWidget,
+                NullWidget,
+            },
+    };
+    break;
+  }
+  }
+}
+
 static void *init_state(mContext_t *context) {
   assert(state.div == NULL);
   assert(state.context == NULL);
+  state.is_dirty = false;
 
-  const MainWidgetState_t *const main_widget_state =
-      (const MainWidgetState_t *)m_get_widget_data(context);
+  m_get_widget_data_cast(main_widget_state, context, MainWidgetState_t);
 
   const int32_t width = lv_obj_get_width(main_widget_state->screen);
   const int32_t height = lv_obj_get_height(main_widget_state->screen);
@@ -269,46 +342,68 @@ static void *init_state(mContext_t *context) {
   lv_obj_set_flex_align(div, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
   lv_obj_set_scrollable(div, false);
-  lv_obj_set_pos(div, 0, main_widget_state->is_link_state_up ? 0 : -height);
   lv_obj_set_style_pad_all(div, 0, 0);
+  lv_obj_set_pos(div, 0, main_widget_state->is_link_state_up ? 0 : -height);
 
   lv_anim_t div_anim;
   lv_anim_init(&div_anim);
   lv_anim_set_var(&div_anim, div); // bind anim, delete anim in [dispose]
   lv_anim_set_values(&div_anim, -height, 0);
-  lv_anim_set_custom_exec_cb(&div_anim, set_div_pos_y);
+  lv_anim_set_custom_exec_cb(&div_anim, div_anim_callback);
   lv_anim_set_path_cb(&div_anim, lv_anim_path_ease_in_out);
-  lv_anim_set_duration(&div_anim, 300);
+  lv_anim_set_duration(&div_anim, 100);
   lv_anim_timeline_add(main_widget_state->anim_timeline, 200, &div_anim);
 
-  state.recv_task.callback = &data_recv_callback;
-  state.recv_task.context = &state;
+  state.k1_listener = (EventTask_t){
+      .callback = &on_k1,
+      .context = &state,
+  };
+  add_k1_listener(&state.k1_listener);
+  state.k2_listener = (EventTask_t){
+      .callback = &on_k2,
+      .context = &state,
+  };
+  add_k2_listener(&state.k2_listener);
+
+  state.recv_task = (DataRecvTask_t){
+      .callback = &data_recv_callback,
+      .context = &state,
+  };
   state.circular_buffer = &circular_buffer;
   state.data_analysis = &data_analysis;
   state.context = context;
   state.div = div;
   clear_data(&state);
+
+  state.refresh_key = 0;
+  state.child_type_key = ChildType_Tachometer;
+  build_children(&state);
+
   return &state;
 }
 
-static void build(mContext_t *context, void *_state,
-                  const mWidget_t *children[MF_MAX_CHILDREN],
-                  const void *children_widget_data[MF_MAX_CHILDREN]) {
-  const MainWidgetState_t *const main_widget_state =
-      (const MainWidgetState_t *)m_get_widget_data(context);
-  LinkUpWidgetState_t *const state = (LinkUpWidgetState_t *)_state;
+static void build(mContext_t *context, mWidget_t children[MF_MAX_CHILDREN]) {
+  m_get_widget_data_cast(data, context, MainWidgetState_t);
+  m_get_state_cast(state, context, LinkUpWidgetState_t);
 
-  children[0] = main_widget_state->is_link_state_up ? &UdpServerWidget : NULL;
-  children_widget_data[0] = &state->recv_task;
+  children[0] = (mWidget_t){
+      .class = data->is_link_state_up ? &UdpServerWidgetClass : NULL,
+      .data = &state->recv_task,
+  };
 
-  children[1] = &TachometerWidget;
-  children_widget_data[1] = state;
+  build_children(state);
+  children[1] = (mWidget_t){
+      .class = &AnimatedTransitionWidgetClass,
+      .data = &state->animated_transition_widget_data,
+  };
 
   return;
 }
 
-static void dispose(mContext_t *context, void *_state) {
-  LinkUpWidgetState_t *const state = (LinkUpWidgetState_t *)_state;
+static void dispose(mContext_t *context) {
+  m_get_state_cast(state, context, LinkUpWidgetState_t);
+  remove_k2_listener(&state->k2_listener);
+  remove_k1_listener(&state->k1_listener);
   lv_anim_del(state->div, NULL);
   lv_obj_del(state->div);
   state->div = NULL;
@@ -318,7 +413,7 @@ static void dispose(mContext_t *context, void *_state) {
   return;
 };
 
-WIDGET_MEMORY_LOCATION const mWidget_t LinkUpWidget = {
+const mWidgetClass_t LinkUpWidgetClass = {
     .init_state = &init_state,
     .build = &build,
     .dispose = &dispose,

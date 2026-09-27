@@ -40,24 +40,21 @@ static void *init_state(mContext_t *context) {
   return &state;
 }
 
-static void build(mContext_t *context, void *_state,
-                  const mWidget_t *children[MF_MAX_CHILDREN],
-                  const void *children_widget_data[MF_MAX_CHILDREN]) {
-  UdpServerWidgetState_t *state = (UdpServerWidgetState_t *)_state;
-  const DataRecvTask_t *const recv_task =
-      (const DataRecvTask_t *)m_get_widget_data(context);
-  state->recv_task = recv_task;
+static void build(mContext_t *context, mWidget_t children[MF_MAX_CHILDREN]) {
+  m_get_state_cast(state, context, UdpServerWidgetState_t);
+  m_get_widget_data_cast(data, context, DataRecvTask_t);
+  state->recv_task = data;
   return;
 }
 
-static void dispose(mContext_t *context, void *_state) {
-  UdpServerWidgetState_t *state = (UdpServerWidgetState_t *)_state;
+static void dispose(mContext_t *context) {
+  m_get_state_cast(state, context, UdpServerWidgetState_t);
   udp_remove(state->pcb);
   state->pcb = NULL;
   return;
 };
 
-WIDGET_MEMORY_LOCATION const mWidget_t UdpServerWidget = {
+const mWidgetClass_t UdpServerWidgetClass = {
     .init_state = &init_state,
     .build = &build,
     .dispose = &dispose,

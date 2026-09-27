@@ -7,19 +7,19 @@
 extern "C" {
 #endif
 
-#define WIDGET_MEMORY_LOCATION
+extern const mWidgetClass_t MainWidgetClass;
 
-extern const mWidget_t MainWidget;
+extern const mWidgetClass_t LinkDownWidgetClass;
 
-extern const mWidget_t LinkDownWidget;
+extern const mWidgetClass_t LinkUpWidgetClass;
 
-extern const mWidget_t LinkUpWidget;
+extern const mWidgetClass_t UdpServerWidgetClass;
 
-extern const mWidget_t UdpServerWidget;
+extern const mWidgetClass_t TachometerWidgetClass;
 
-extern const mWidget_t TachometerWidget;
+extern const mWidgetClass_t TachometerLedControllerWidgetClass;
 
-extern const mWidget_t TachometerLedControllerWidget;
+extern const mWidgetClass_t ControlInfoWidgetClass;
 
 #include "common.h"
 
@@ -83,34 +83,21 @@ typedef struct {
 
 void data_analysis_clear(DataAnalysis_t *data_analysis);
 
+#include "animated_transition_widget.h"
+
 typedef struct {
   lv_obj_t *div;
   mContext_t *context;
   CircularBuffer_t *circular_buffer;
   DataAnalysis_t *data_analysis;
   DataRecvTask_t recv_task;
+  EventTask_t k1_listener;
+  EventTask_t k2_listener;
+  AnimatedTransitionWidgetData_t animated_transition_widget_data;
+  uint16_t refresh_key;
+  uint16_t child_type_key;
   bool is_dirty;
 } LinkUpWidgetState_t;
-
-typedef struct {
-  LinkUpWidgetState_t *link_up_widget_state;
-  lv_obj_t *div; // root
-
-  lv_obj_t *scale;
-  lv_scale_section_t *sections[5];
-  lv_obj_t *needle_line;
-  lv_obj_t *hr_value_label;
-  lv_obj_t *bpm_label;
-  lv_obj_t *power_level_label;
-
-  lv_obj_t *led_1;
-  lv_obj_t *led_2;
-  lv_obj_t *led_3;
-  lv_obj_t *led_4;
-  lv_obj_t *led_5;
-  lv_timer_t *led_blink_timer;
-  bool led_on;
-} TachometerWidgetState_t;
 
 #ifdef __cplusplus
 }

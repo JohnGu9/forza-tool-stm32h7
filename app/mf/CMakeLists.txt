@@ -14,6 +14,6 @@ add_library(mf OBJECT ${mf_src})
 target_include_directories(mf PUBLIC ${CMAKE_CURRENT_LIST_DIR})
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_LIST_DIR)
-    add_executable(mf_test ${CMAKE_CURRENT_LIST_DIR})
+    add_executable(mf_test ${CMAKE_CURRENT_LIST_DIR}/test.c)
     target_link_libraries(mf_test PRIVATE mf)
 endif()

@@ -1,3 +1,4 @@
+#include "common.h"
 #include "widgets.h"
 
 #include "mf.h"
@@ -6,19 +7,22 @@
 #include <lvgl.h>
 #include <stdlib.h>
 
-static TachometerWidgetState_t state = {0};
+typedef struct {
+  lv_obj_t *div; // root
+
+  lv_obj_t *scale;
+  lv_scale_section_t *sections[5];
+  lv_obj_t *needle_line;
+  lv_obj_t *gear_label;
+  lv_obj_t *rpm_label;
+  lv_obj_t *power_level_label;
+} TachometerWidgetState_t;
 
 typedef struct {
   lv_style_t items;
   lv_style_t indicator;
   lv_style_t main;
 } section_styles_t;
-
-static section_styles_t zone1_styles;
-static section_styles_t zone2_styles;
-static section_styles_t zone3_styles;
-static section_styles_t zone4_styles;
-static section_styles_t zone5_styles;
 
 static lv_color_t get_hr_zone_color(int32_t hr, int32_t range1, int32_t range2,
                                     int32_t range3, int32_t range4) {
@@ -88,10 +92,33 @@ static void get_section_range(const SledData_t *const sled,
                 : below_90_upper->CurrentEngineRpm / sled->EngineMaxRpm * 100;
 }
 
+static void reset_to_default(TachometerWidgetState_t *state) {
+  lv_scale_set_line_needle_value(state->scale, state->needle_line, 50, 0);
+
+  lv_label_set_text(state->gear_label, "R");
+
+  lv_scale_set_section_range(state->scale, state->sections[0], 0, 20);
+  lv_scale_set_section_range(state->scale, state->sections[1], 20, 40);
+  lv_scale_set_section_range(state->scale, state->sections[2], 40, 60);
+  lv_scale_set_section_range(state->scale, state->sections[3], 60, 80);
+  lv_scale_set_section_range(state->scale, state->sections[4], 80, 100);
+
+  /* Update text color based on zone */
+  lv_color_t zone_color = get_hr_zone_color(0, 20, 40, 60, 80);
+  lv_obj_set_style_text_color(state->gear_label, zone_color, 0);
+  lv_obj_set_style_text_color(state->rpm_label, zone_color, 0);
+  lv_obj_set_style_text_color(state->power_level_label, zone_color, 0);
+
+  lv_label_set_text(state->power_level_label, "0%%");
+
+  lv_label_set_text(state->rpm_label, "Rpm");
+}
+
 static void set_data(TachometerWidgetState_t *state,
                      const DataPacket_t *data_packet_nullable, // nullable
                      const DataAnalysis_t *data_analysis) {
   if (data_packet_nullable == NULL) {
+    reset_to_default(state);
     return;
   }
   const DataPacket_t *const data_packet = data_packet_nullable;
@@ -100,6 +127,7 @@ static void set_data(TachometerWidgetState_t *state,
   const DashData_t *const dash =
       get_dash_data(data_packet->buffer, data_packet->length);
   if (sled == NULL) {
+    reset_to_default(state);
     return;
   }
   float percent = sled->EngineMaxRpm == 0
@@ -115,9 +143,9 @@ static void set_data(TachometerWidgetState_t *state,
   /* Update HR text */
   if (dash != NULL) {
     if (dash->Gear == 0) {
-      lv_label_set_text(state->hr_value_label, "R");
+      lv_label_set_text(state->gear_label, "R");
     } else {
-      lv_label_set_text_fmt(state->hr_value_label, "%d", dash->Gear);
+      lv_label_set_text_fmt(state->gear_label, "%d", dash->Gear);
     }
     int32_t range1 = 0, range2 = 0, range3 = 0, range4 = 0;
     get_section_range(sled, data_analysis, &range1, &range2, &range3, &range4);
@@ -133,8 +161,8 @@ static void set_data(TachometerWidgetState_t *state,
     /* Update text color based on zone */
     lv_color_t zone_color =
         get_hr_zone_color(hr_value, range1, range2, range3, range4);
-    lv_obj_set_style_text_color(state->hr_value_label, zone_color, 0);
-    lv_obj_set_style_text_color(state->bpm_label, zone_color, 0);
+    lv_obj_set_style_text_color(state->gear_label, zone_color, 0);
+    lv_obj_set_style_text_color(state->rpm_label, zone_color, 0);
     lv_obj_set_style_text_color(state->power_level_label, zone_color, 0);
 
     lv_label_set_text_fmt(
@@ -143,7 +171,7 @@ static void set_data(TachometerWidgetState_t *state,
             ? 0
             : (int32_t)(dash->Power / data_analysis->max_power.Power * 100));
   }
-  lv_label_set_text_fmt(state->bpm_label, "%ld",
+  lv_label_set_text_fmt(state->rpm_label, "%ld",
                         (int32_t)sled->CurrentEngineRpm);
 }
 
@@ -168,6 +196,12 @@ static void lv_tachometer(lv_obj_t *parent, TachometerWidgetState_t *state) {
   lv_obj_set_style_length(scale, 6, LV_PART_ITEMS);
   lv_obj_set_style_length(scale, 10, LV_PART_INDICATOR);
   lv_obj_set_style_arc_width(scale, 0, LV_PART_MAIN);
+
+  static section_styles_t zone1_styles;
+  static section_styles_t zone2_styles;
+  static section_styles_t zone3_styles;
+  static section_styles_t zone4_styles;
+  static section_styles_t zone5_styles;
 
   /* Zone 1: (Grey) */
   init_section_styles(&zone1_styles, lv_palette_main(LV_PALETTE_GREY));
@@ -228,20 +262,20 @@ static void lv_tachometer(lv_obj_t *parent, TachometerWidgetState_t *state) {
                         LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
   lv_obj_t *hr_value_label = lv_label_create(hr_container);
-  state->hr_value_label = hr_value_label;
+  state->gear_label = hr_value_label;
   lv_label_set_text(hr_value_label, "R");
   lv_obj_set_style_text_font(hr_value_label, &lv_font_montserrat_32, 0);
   lv_obj_set_style_text_align(hr_value_label, LV_TEXT_ALIGN_CENTER, 0);
 
   lv_obj_t *bpm_label = lv_label_create(hr_container);
-  state->bpm_label = bpm_label;
+  state->rpm_label = bpm_label;
   lv_label_set_text(bpm_label, "Rpm");
   lv_obj_set_style_text_font(bpm_label, &lv_font_montserrat_10, 0);
   lv_obj_set_style_text_align(bpm_label, LV_TEXT_ALIGN_CENTER, 0);
 
   lv_obj_t *power_level_label = lv_label_create(hr_container);
   state->power_level_label = power_level_label;
-  lv_label_set_text(power_level_label, "0\%");
+  lv_label_set_text(power_level_label, "0%%");
   lv_obj_set_style_text_font(power_level_label, &lv_font_montserrat_10, 0);
   lv_obj_set_style_text_align(power_level_label, LV_TEXT_ALIGN_CENTER, 0);
 
@@ -251,82 +285,35 @@ static void lv_tachometer(lv_obj_t *parent, TachometerWidgetState_t *state) {
   lv_obj_set_style_text_color(power_level_label, zone_color, 0);
 }
 
-static void lv_led(lv_obj_t *parent, TachometerWidgetState_t *state) {
-  lv_obj_t *div = lv_obj_create(parent);
-  lv_obj_set_height(div, 36);
-  lv_obj_set_flex_flow(div, LV_FLEX_FLOW_ROW);
-  lv_obj_set_flex_align(div, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
-                        LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_scrollable(div, false);
-
-  lv_obj_t *led_1 = lv_led_create(div);
-  state->led_1 = led_1;
-  lv_obj_set_size(led_1, 10, 10);
-  lv_led_set_color(led_1, lv_palette_main(LV_PALETTE_BLUE));
-  lv_led_set_brightness(led_1, 0);
-
-  lv_obj_t *led_2 = lv_led_create(div);
-  state->led_2 = led_2;
-  lv_obj_set_size(led_2, 10, 10);
-  lv_led_set_color(led_2, lv_palette_main(LV_PALETTE_BLUE));
-  lv_led_set_brightness(led_2, 0);
-
-  lv_obj_t *led_3 = lv_led_create(div);
-  state->led_3 = led_3;
-  lv_obj_set_size(led_3, 10, 10);
-  lv_led_set_color(led_3, lv_palette_main(LV_PALETTE_GREEN));
-  lv_led_set_brightness(led_3, 0);
-
-  lv_obj_t *led_4 = lv_led_create(div);
-  state->led_4 = led_4;
-  lv_obj_set_size(led_4, 10, 10);
-  lv_led_set_color(led_4, lv_palette_main(LV_PALETTE_BLUE));
-  lv_led_set_brightness(led_4, 0);
-
-  lv_obj_t *led_5 = lv_led_create(div);
-  state->led_5 = led_5;
-  lv_obj_set_size(led_5, 10, 10);
-  lv_led_set_color(led_5, lv_palette_main(LV_PALETTE_BLUE));
-  lv_led_set_brightness(led_5, 0);
-}
-
 static void *init_state(mContext_t *context) {
-  LinkUpWidgetState_t *const link_up_widget_state =
-      (LinkUpWidgetState_t *)m_get_widget_data(context);
-  lv_led(link_up_widget_state->div, &state);
-  lv_tachometer(link_up_widget_state->div, &state);
+  m_get_widget_data_cast(data, context, LinkUpWidgetState_t);
+  TachometerWidgetState_t *const state = new_object(TachometerWidgetState_t);
+
+  lv_tachometer(data->div, state);
   const DataPacket_t *data_packet =
-      circular_buffer_get_last(link_up_widget_state->circular_buffer);
-  set_data(&state, data_packet, link_up_widget_state->data_analysis);
-  state.link_up_widget_state = link_up_widget_state;
-  return &state;
+      circular_buffer_get_last(data->circular_buffer);
+  set_data(state, data_packet, data->data_analysis);
+  return state;
 }
 
-static void build(mContext_t *context, void *_state,
-                  const mWidget_t *children[MF_MAX_CHILDREN],
-                  const void *children_widget_data[MF_MAX_CHILDREN]) {
-  TachometerWidgetState_t *state = (TachometerWidgetState_t *)_state;
-  LinkUpWidgetState_t *const link_up_widget_state =
-      (LinkUpWidgetState_t *)m_get_widget_data(context);
+static void build(mContext_t *context, mWidget_t children[MF_MAX_CHILDREN]) {
+  m_get_widget_data_cast(data, context, LinkUpWidgetState_t);
+  m_get_state_cast(state, context, TachometerWidgetState_t);
   const DataPacket_t *data_packet =
-      circular_buffer_get_last(link_up_widget_state->circular_buffer);
-  set_data(state, data_packet, link_up_widget_state->data_analysis);
-
-  children[0] = &TachometerLedControllerWidget;
-  children_widget_data[0] = state;
+      circular_buffer_get_last(data->circular_buffer);
+  set_data(state, data_packet, data->data_analysis);
   return;
 }
 
-static void dispose(mContext_t *context, void *_state) {
-  TachometerWidgetState_t *state = (TachometerWidgetState_t *)_state;
+static void dispose(mContext_t *context) {
+  m_get_state_cast(state, context, TachometerWidgetState_t);
   lv_obj_del(state->div);
-  state->div = NULL;
-  state->link_up_widget_state = NULL;
+  delete_object(state);
   return;
 };
 
-const mWidget_t TachometerWidget = {
+const mWidgetClass_t TachometerWidgetClass = {
     .init_state = &init_state,
     .build = &build,
     .dispose = &dispose,
-} WIDGET_MEMORY_LOCATION;
+};

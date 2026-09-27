@@ -48,7 +48,7 @@ static int32_t st7735_transmit(St7735Handle_t *self, const uint8_t *pData,
     const uint16_t transmit_size = MIN(size, 0xFFFFU);
     HAL_StatusTypeDef status =
         HAL_SPI_Transmit_DMA(&hspi2, pData, transmit_size);
-    if (status == HAL_OK) {
+    if (likely(status == HAL_OK)) {
       // wait for [HAL_SPI_TxCpltCallback] | [HAL_SPI_ErrorCallback]
       osMessageQueueGet(spi2TxCompletedQueueHandle, &unused_value, NULL,
                         osWaitForever);
@@ -63,13 +63,13 @@ static int32_t st7735_transmit(St7735Handle_t *self, const uint8_t *pData,
 }
 
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {
-  if (hspi == &hspi2) { // likely
+  if (likely(hspi == &hspi2)) { // likely
     osMessageQueuePut(spi2TxCompletedQueueHandle, &unused_value, 0, 0);
   }
 }
 
 void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi) {
-  if (hspi == &hspi2) { // likely
+  if (likely(hspi == &hspi2)) { // likely
     osMessageQueuePut(spi2TxCompletedQueueHandle, &unused_value, 0, 0);
   }
 }
@@ -102,7 +102,7 @@ static void lvgl_flush(lv_display_t *disp, const lv_area_t *area,
       .callback = lvgl_flush_async,
   };
   osStatus_t status = osMessageQueuePut(spi2TxQueueHandle, &task, 0, 0);
-  if (status != osOK) { // give up flush
+  if (unlikely(status != osOK)) { // give up flush
     lv_display_flush_ready(disp);
   }
 }
@@ -141,7 +141,7 @@ void StartSpi2TxTask(void *argument) {
   /* Infinite loop */
   for (;;) {
     status = osMessageQueueGet(spi2TxQueueHandle, &task, NULL, osWaitForever);
-    if (status == osOK) {
+    if (likely(status == osOK)) {
       task.callback(task.context);
     }
   }
@@ -327,18 +327,53 @@ void sys_arch_unprotect(sys_prot_t pval) { (void)pval; }
 
 uint32_t sys_now(void) { return HAL_GetTick(); }
 
+static EventTaskSet_t k1_listeners;
+
+int32_t add_k1_listener(EventTask_t *task) {
+  return !insert(&k1_listeners, (uintptr_t)task);
+}
+
+int32_t remove_k1_listener(EventTask_t *task) {
+  erase(&k1_listeners, (uintptr_t)task);
+  return 0;
+}
+
+void notify_k1_listener() {
+  for_each(&k1_listeners, el) {
+    EventTask_t *task = (EventTask_t *)(*el);
+    task->callback(task->context);
+  }
+}
+
+static EventTaskSet_t k2_listeners;
+
+int32_t add_k2_listener(EventTask_t *task) {
+  return !insert(&k2_listeners, (uintptr_t)task);
+}
+
+int32_t remove_k2_listener(EventTask_t *task) {
+  erase(&k2_listeners, (uintptr_t)task);
+  return 0;
+}
+
+void notify_k2_listener() {
+  for_each(&k2_listeners, el) {
+    EventTask_t *task = (EventTask_t *)(*el);
+    task->callback(task->context);
+  }
+}
+
 static bool is_link_up = false;
 
-static EventTask_t *link_state_listeners[8];
+static EventTaskSet_t link_state_listeners;
 
 int32_t add_link_state_listener(EventTask_t *task) {
-  return add_task(task, link_state_listeners,
-                  TU_ARRAY_SIZE(link_state_listeners));
+  return !insert(&link_state_listeners, (uintptr_t)task);
 }
 
 int32_t remove_link_state_listener(EventTask_t *task) {
-  return remove_task(task, link_state_listeners,
-                     TU_ARRAY_SIZE(link_state_listeners));
+  erase(&link_state_listeners, (uintptr_t)task);
+  return 0;
 }
 
 bool is_link_state_up() { return is_link_up; }
@@ -346,13 +381,19 @@ bool is_link_state_up() { return is_link_up; }
 // Invoked when device is mounted
 void tud_mount_cb(void) {
   is_link_up = true;
-  invoke_tasks(link_state_listeners, TU_ARRAY_SIZE(link_state_listeners));
+  for_each(&link_state_listeners, el) {
+    EventTask_t *task = (EventTask_t *)(*el);
+    task->callback(task->context);
+  }
 }
 
 // Invoked when device is unmounted
 void tud_umount_cb(void) {
   is_link_up = false;
-  invoke_tasks(link_state_listeners, TU_ARRAY_SIZE(link_state_listeners));
+  for_each(&link_state_listeners, el) {
+    EventTask_t *task = (EventTask_t *)(*el);
+    task->callback(task->context);
+  }
 }
 
 // Invoked when usb bus is suspended
@@ -361,13 +402,19 @@ void tud_umount_cb(void) {
 void tud_suspend_cb(bool remote_wakeup_en) {
   (void)remote_wakeup_en;
   is_link_up = false;
-  invoke_tasks(link_state_listeners, TU_ARRAY_SIZE(link_state_listeners));
+  for_each(&link_state_listeners, el) {
+    EventTask_t *task = (EventTask_t *)(*el);
+    task->callback(task->context);
+  }
 }
 
 // Invoked when usb bus is resumed
 void tud_resume_cb(void) {
   is_link_up = true;
-  invoke_tasks(link_state_listeners, TU_ARRAY_SIZE(link_state_listeners));
+  for_each(&link_state_listeners, el) {
+    EventTask_t *task = (EventTask_t *)(*el);
+    task->callback(task->context);
+  }
 }
 
 void handle_otg_irq() {
@@ -375,7 +422,25 @@ void handle_otg_irq() {
   osEventFlagsSet(appEventHandle, APP_EVENT_USB);
 }
 
-void io_init() {
+static void handle_k1_irq() { osEventFlagsSet(appEventHandle, APP_EVENT_K1); }
+
+static void handle_k2_irq() { osEventFlagsSet(appEventHandle, APP_EVENT_K2); }
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+  switch (GPIO_Pin) {
+  case K1_Pin:
+    handle_k1_irq();
+    break;
+  case K2_Pin:
+    handle_k2_irq();
+    break;
+  }
+}
+
+void init_io() {
+  init(&link_state_listeners);
+  init(&k1_listeners);
+  init(&k2_listeners);
   /* initialize TinyUSB */
 
   // init device stack on configured roothub port

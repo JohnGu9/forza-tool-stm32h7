@@ -1,17 +1,18 @@
 #include "app.h"
 #include "common.h"
 #include "io.h"
-#include "stm32h7xx_hal_def.h"
+#include "main.h"
 #include "widget/widgets.h"
+
+#include "mf.h"
 
 #include "lwip/timeouts.h"
 #include "tusb.h"
 
-#include "mf.h"
-
 #include "cmsis_os2.h"
-#include "stm32h7xx_hal_conf.h"
+#include "stm32h7xx_hal_gpio.h"
 
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -27,10 +28,11 @@ static void on_widget_error(const char *reason) {
 }
 
 void run_app(const AppContext_t *context) {
-  io_init();
+  init_io();
 
   mContext_t widget_context = {0};
-  m_attach(&widget_context, &MainWidget, &new_context, &delete_context,
+  mWidget_t main_widget = {.class = &MainWidgetClass, .data = NULL};
+  m_attach(&widget_context, &main_widget, &new_context, &delete_context,
            &on_widget_error);
 
   uint32_t flags;
@@ -38,13 +40,13 @@ void run_app(const AppContext_t *context) {
   osStatus_t status;
 
   status = osTimerStart(lvglTimerHandle, LV_DEF_REFR_PERIOD);
-  assert_param(status == osOK);
+  assert(status == osOK);
 
   status = osTimerStart(lwipTimerHandle, 500);
-  assert_param(status == osOK);
+  assert(status == osOK);
 
   status = osTimerStart(usbTimerHandle, 1);
-  assert_param(status == osOK);
+  assert(status == osOK);
 
   lv_timer_handler();
 
@@ -52,16 +54,25 @@ void run_app(const AppContext_t *context) {
   for (;;) {
     flags = osEventFlagsWait(appEventHandle, APP_EVENT_ALL, osFlagsWaitAny,
                              osWaitForever);
-    if (flags & osFlagsError) {
+    if (unlikely(flags & osFlagsError)) {
       // @TODO:
     } else {
-      if (flags | APP_EVENT_USB) {
-        tud_task();
-        // ensure [tud_task] be called as max time gap 100ms
-        osTimerStart(usbTimerHandle, 100);
+      if (flags & APP_EVENT_LVGL) {
+        lv_timer_handler();
       }
-      if (flags | APP_EVENT_LWIP) {
+      if (flags & APP_EVENT_USB) {
+        tud_task();
+        // ensure [tud_task] be called as max time gap 200ms
+        osTimerStart(usbTimerHandle, 200);
+      }
+      if (flags & APP_EVENT_LWIP) {
         sys_check_timeouts();
+      }
+      if (flags & APP_EVENT_K1) {
+        osTimerStart(k1TimerHandle, 100);
+      }
+      if (flags & APP_EVENT_K2) {
+        osTimerStart(k2TimerHandle, 100);
       }
     }
     for (; osMessageQueueGetCount(defaultQueueHandle) != 0;) {
@@ -71,7 +82,7 @@ void run_app(const AppContext_t *context) {
         break;
       }
       status = osMessageQueueGet(defaultQueueHandle, &task, NULL, 0);
-      if (status == osOK) {
+      if (likely(status == osOK)) {
         task.callback(task.context);
       }
     }
@@ -92,7 +103,7 @@ size_t board_usb_get_serial(uint16_t id[], size_t max_len) {
 
 void schedule_task_on_main_thread(const EventTask_t *task) {
   osStatus_t status = osMessageQueuePut(defaultQueueHandle, task, 0, 0);
-  if (status == osOK) {
+  if (likely(status == osOK)) {
     osEventFlagsSet(appEventHandle, APP_EVENT_NORMAL);
   }
 }
@@ -101,19 +112,36 @@ void usbTimerCallback(void *argument) {
   osEventFlagsSet(appEventHandle, APP_EVENT_USB);
 }
 
-static void lv_timer_handler_async(void *context) {
-  UNUSED(context);
-  lv_timer_handler();
-}
-
 void lvglTimerCallback(void *argument) {
-  const EventTask_t task = {
-      .callback = &lv_timer_handler_async,
-      .context = NULL,
-  };
-  schedule_task_on_main_thread(&task);
+  osEventFlagsSet(appEventHandle, APP_EVENT_LVGL);
 }
 
 void lwipTimerCallback(void *argument) {
   osEventFlagsSet(appEventHandle, APP_EVENT_LWIP);
+}
+
+static void k1_async(void *context) { notify_k1_listener(); }
+
+void k1TimerCallback(void *argument) {
+  GPIO_PinState state = HAL_GPIO_ReadPin(K1_GPIO_Port, K1_Pin);
+  if (state == GPIO_PIN_RESET) {
+    const EventTask_t task = {
+        .callback = &k1_async,
+        .context = NULL,
+    };
+    schedule_task_on_main_thread(&task);
+  }
+}
+
+static void k2_async(void *context) { notify_k2_listener(); }
+
+void k2TimerCallback(void *argument) {
+  GPIO_PinState state = HAL_GPIO_ReadPin(K2_GPIO_Port, K2_Pin);
+  if (state == GPIO_PIN_RESET) {
+    const EventTask_t task = {
+        .callback = &k2_async,
+        .context = NULL,
+    };
+    schedule_task_on_main_thread(&task);
+  }
 }
