@@ -108,9 +108,9 @@ static void lvgl_flush(lv_display_t *disp, const lv_area_t *area,
 }
 
 static uint8_t lvgl_buffer[ST7735_WIDTH * ST7735_HEIGHT * 2]
-    __attribute__((section(".RAM_D2")));
+    __attribute__((section(".RAM")));
 static uint8_t lvgl_buffer_second[ST7735_WIDTH * ST7735_HEIGHT * 2]
-    __attribute__((section(".RAM_D2")));
+    __attribute__((section(".RAM")));
 
 void StartSpi2TxTask(void *argument) {
   // init display
