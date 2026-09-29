@@ -2,6 +2,8 @@
 
 A forza telemetry app on stm32h7. Come with real time car engine power output analysis. Support Forza Motorsport / Forza Horizon.
 
+<img src="./doc/demo.jpg" height="340"/>
+
 <video width="852" height="480" controls>
   <source src="./doc/demo.mp4" type="video/mp4">
 </video>
@@ -49,4 +51,6 @@ st7735 (display UI)
 
 # Relative
 
-My another project. Only frontend software -- [forza-tool](https://github.com/JohnGu9/forza-tool).
+My another project. Only frontend software [forza-tool](https://github.com/JohnGu9/forza-tool). You can use the [Network - Forward] feature to use both software at the same time (remember to set the listen address to 0.0.0.0).
+
+<img src="./doc/forza-tool.png"/>

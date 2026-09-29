@@ -97,7 +97,7 @@ static void lvgl_flush(lv_display_t *disp, const lv_area_t *area,
   ctx.area.y1 = area->y1;
   ctx.area.y2 = area->y2;
   ctx.px_buf = px_buf;
-  EventTask_t task = {
+  const EventTask_t task = {
       .context = &ctx,
       .callback = lvgl_flush_async,
   };

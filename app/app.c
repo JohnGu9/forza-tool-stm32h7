@@ -16,6 +16,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+extern IWDG_HandleTypeDef hiwdg1;
+
 static mContext_t *new_context() {
   return (mContext_t *)malloc(sizeof(mContext_t));
 }
@@ -31,7 +33,7 @@ void run_app(const AppContext_t *context) {
   init_io();
 
   mContext_t widget_context = {0};
-  mWidget_t main_widget = {.class = &MainWidgetClass, .data = NULL};
+  const mWidget_t main_widget = {.class = &MainWidgetClass, .data = NULL};
   m_attach(&widget_context, &main_widget, &new_context, &delete_context,
            &on_widget_error);
 
@@ -39,13 +41,16 @@ void run_app(const AppContext_t *context) {
   EventTask_t task;
   osStatus_t status;
 
+  status = osTimerStart(iwdgRefreshTimerHandle, 1000);
+  assert(status == osOK);
+
   status = osTimerStart(lvglTimerHandle, LV_DEF_REFR_PERIOD);
   assert(status == osOK);
 
   status = osTimerStart(lwipTimerHandle, 500);
   assert(status == osOK);
 
-  status = osTimerStart(usbTimerHandle, 1);
+  status = osTimerStart(usbTimerHandle, 5);
   assert(status == osOK);
 
   lv_timer_handler();
@@ -74,6 +79,15 @@ void run_app(const AppContext_t *context) {
       if (flags & APP_EVENT_K2) {
         osTimerStart(k2TimerHandle, 100);
       }
+      if (flags & APP_EVENT_K1_CONFIRM) {
+        invoke_tasks(&k1_listeners);
+      }
+      if (flags & APP_EVENT_K2_CONFIRM) {
+        invoke_tasks(&k2_listeners);
+      }
+      if (flags & APP_EVENT_IWDG) {
+        HAL_IWDG_Refresh(&hiwdg1);
+      }
     }
     for (; osMessageQueueGetCount(defaultQueueHandle) != 0;) {
       flags =
@@ -99,7 +113,7 @@ size_t board_usb_get_serial(uint16_t id[], size_t max_len) {
       HAL_GetUIDw1(),
       HAL_GetUIDw2(),
   };
-  assert_param(max_len > sizeof(uuid));
+  assert(max_len > sizeof(uuid));
   memcpy(id, uuid, sizeof(uuid));
   return sizeof(uuid);
 }
@@ -123,28 +137,20 @@ void lwipTimerCallback(void *argument) {
   osEventFlagsSet(appEventHandle, APP_EVENT_LWIP);
 }
 
-static void k1_async(void *context) { invoke_tasks(&k1_listeners); }
-
 void k1TimerCallback(void *argument) {
-  GPIO_PinState state = HAL_GPIO_ReadPin(K1_GPIO_Port, K1_Pin);
+  const GPIO_PinState state = HAL_GPIO_ReadPin(K1_GPIO_Port, K1_Pin);
   if (state == GPIO_PIN_RESET) {
-    const EventTask_t task = {
-        .callback = &k1_async,
-        .context = NULL,
-    };
-    schedule_task_on_main_thread(&task);
+    osEventFlagsSet(appEventHandle, APP_EVENT_K1_CONFIRM);
   }
 }
 
-static void k2_async(void *context) { invoke_tasks(&k2_listeners); }
-
 void k2TimerCallback(void *argument) {
-  GPIO_PinState state = HAL_GPIO_ReadPin(K2_GPIO_Port, K2_Pin);
+  const GPIO_PinState state = HAL_GPIO_ReadPin(K2_GPIO_Port, K2_Pin);
   if (state == GPIO_PIN_RESET) {
-    const EventTask_t task = {
-        .callback = &k2_async,
-        .context = NULL,
-    };
-    schedule_task_on_main_thread(&task);
+    osEventFlagsSet(appEventHandle, APP_EVENT_K2_CONFIRM);
   }
+}
+
+void iwdgRefreshTimerCallback(void *argument) {
+  osEventFlagsSet(appEventHandle, APP_EVENT_IWDG);
 }

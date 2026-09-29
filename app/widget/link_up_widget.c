@@ -115,7 +115,7 @@ static bool is_new_data_more_superior(const SledData_t *const sled,
   }
   float rpm_delta =
       abs(origin_meta_data->CurrentEngineRpm - sled->CurrentEngineRpm);
-  if (rpm_delta < 50) {
+  if (rpm_delta < 5) {
     return dash->Power > origin_meta_data->Power;
   }
 
@@ -268,7 +268,7 @@ typedef enum {
   ChildType_GForce,
 } ChildType_t;
 
-static ChildType_t get_next_key2(ChildType_t current) {
+static ChildType_t get_next_child_type(ChildType_t current) {
   switch (current) {
   case ChildType_Tachometer:
     return ChildType_ControlInfo;
@@ -282,7 +282,7 @@ static ChildType_t get_next_key2(ChildType_t current) {
 
 static void on_k1(void *context) {
   LinkUpWidgetState_t *state = (LinkUpWidgetState_t *)context;
-  state->child_type_key = get_next_key2(state->child_type_key);
+  state->child_type_key = get_next_child_type(state->child_type_key);
   m_set_state(state->context);
 }
 
@@ -296,10 +296,7 @@ static void build_children(LinkUpWidgetState_t *const state) {
         .key = key,
         .children =
             {
-                {
-                    .class = &ControlInfoWidgetClass,
-                    .data = state,
-                },
+                {.class = &ControlInfoWidgetClass, .data = state},
                 NullWidget,
                 NullWidget,
                 NullWidget,
@@ -313,10 +310,7 @@ static void build_children(LinkUpWidgetState_t *const state) {
         .key = key,
         .children =
             {
-                {
-                    .class = &GForceWidgetClass,
-                    .data = state,
-                },
+                {.class = &GForceWidgetClass, .data = state},
                 NullWidget,
                 NullWidget,
                 NullWidget,
@@ -331,14 +325,8 @@ static void build_children(LinkUpWidgetState_t *const state) {
         .key = key,
         .children =
             {
-                {
-                    .class = &TachometerLedControllerWidgetClass,
-                    .data = state,
-                },
-                {
-                    .class = &TachometerWidgetClass,
-                    .data = state,
-                },
+                {.class = &TachometerLedControllerWidgetClass, .data = state},
+                {.class = &TachometerWidgetClass, .data = state},
                 NullWidget,
                 NullWidget,
             },
@@ -376,22 +364,14 @@ static void *init_state(mContext_t *context) {
   lv_anim_set_duration(&div_anim, 100);
   lv_anim_timeline_add(main_widget_state->anim_timeline, 200, &div_anim);
 
-  state.k1_listener = (EventTask_t){
-      .callback = &on_k1,
-      .context = &state,
-  };
+  state.k1_listener = (EventTask_t){.callback = &on_k1, .context = &state};
   add_task(&k1_listeners, &state.k1_listener);
 
-  state.k2_listener = (EventTask_t){
-      .callback = &on_k2,
-      .context = &state,
-  };
+  state.k2_listener = (EventTask_t){.callback = &on_k2, .context = &state};
   add_task(&k2_listeners, &state.k2_listener);
 
-  state.recv_task = (DataRecvTask_t){
-      .callback = &data_recv_callback,
-      .context = &state,
-  };
+  state.recv_task =
+      (DataRecvTask_t){.callback = &data_recv_callback, .context = &state};
   init(&state.data_recv_listeners);
 
   state.circular_buffer = &circular_buffer;

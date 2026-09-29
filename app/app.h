@@ -18,6 +18,7 @@ extern osTimerId_t lwipTimerHandle;
 extern osTimerId_t usbTimerHandle;
 extern osTimerId_t k1TimerHandle;
 extern osTimerId_t k2TimerHandle;
+extern osTimerId_t iwdgRefreshTimerHandle;
 
 extern osEventFlagsId_t appEventHandle;
 #define APP_EVENT_NORMAL (1U << 0)
@@ -26,10 +27,14 @@ extern osEventFlagsId_t appEventHandle;
 #define APP_EVENT_LWIP (1U << 3)
 #define APP_EVENT_K1 (1U << 4)
 #define APP_EVENT_K2 (1U << 5)
+#define APP_EVENT_K1_CONFIRM (1U << 6)
+#define APP_EVENT_K2_CONFIRM (1U << 7)
+#define APP_EVENT_IWDG (1U << 8)
 
 #define APP_EVENT_ALL                                                          \
   APP_EVENT_NORMAL | APP_EVENT_USB | APP_EVENT_LVGL | APP_EVENT_LWIP |         \
-      APP_EVENT_K1 | APP_EVENT_K2
+      APP_EVENT_K1 | APP_EVENT_K2 | APP_EVENT_K1_CONFIRM |                     \
+      APP_EVENT_K2_CONFIRM | APP_EVENT_IWDG
 
 void run_app(const AppContext_t *context);
 void schedule_task_on_main_thread(const EventTask_t *task);

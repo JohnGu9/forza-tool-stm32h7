@@ -44,6 +44,8 @@ typedef StaticTask_t osStaticThreadDef_t;
 
 /* Private variables ---------------------------------------------------------*/
 
+IWDG_HandleTypeDef hiwdg1;
+
 SPI_HandleTypeDef hspi2;
 DMA_HandleTypeDef hdma_spi2_tx;
 
@@ -113,6 +115,11 @@ osTimerId_t k2TimerHandle;
 const osTimerAttr_t k2Timer_attributes = {
   .name = "k2Timer"
 };
+/* Definitions for iwdgRefreshTimer */
+osTimerId_t iwdgRefreshTimerHandle;
+const osTimerAttr_t iwdgRefreshTimer_attributes = {
+  .name = "iwdgRefreshTimer"
+};
 /* Definitions for displayReadyEvent */
 osEventFlagsId_t displayReadyEventHandle;
 const osEventFlagsAttr_t displayReadyEvent_attributes = {
@@ -135,6 +142,7 @@ static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_USB_OTG_FS_PCD_Init(void);
+static void MX_IWDG1_Init(void);
 void StartDefaultTask(void *argument);
 extern void StartSpi2TxTask(void *argument);
 extern void lvglTimerCallback(void *argument);
@@ -142,6 +150,7 @@ extern void lwipTimerCallback(void *argument);
 extern void usbTimerCallback(void *argument);
 extern void k1TimerCallback(void *argument);
 extern void k2TimerCallback(void *argument);
+extern void iwdgRefreshTimerCallback(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -198,6 +207,7 @@ int main(void)
   MX_DMA_Init();
   MX_SPI2_Init();
   MX_USB_OTG_FS_PCD_Init();
+  MX_IWDG1_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -229,6 +239,9 @@ int main(void)
   /* creation of k2Timer */
   k2TimerHandle = osTimerNew(k2TimerCallback, osTimerOnce, NULL, &k2Timer_attributes);
 
+  /* creation of iwdgRefreshTimer */
+  iwdgRefreshTimerHandle = osTimerNew(iwdgRefreshTimerCallback, osTimerPeriodic, NULL, &iwdgRefreshTimer_attributes);
+
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
@@ -238,7 +251,7 @@ int main(void)
   spi2TxQueueHandle = osMessageQueueNew (1, sizeof(EventTask_t), &spi2TxQueue_attributes);
 
   /* creation of defaultQueue */
-  defaultQueueHandle = osMessageQueueNew (16, sizeof(EventTask_t), &defaultQueue_attributes);
+  defaultQueueHandle = osMessageQueueNew (32, sizeof(EventTask_t), &defaultQueue_attributes);
 
   /* creation of spi2TxCompletedQueue */
   spi2TxCompletedQueueHandle = osMessageQueueNew (1, sizeof(uint32_t), &spi2TxCompletedQueue_attributes);
@@ -306,20 +319,23 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI48|RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI48|RCC_OSCILLATORTYPE_HSI
+                              |RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.HSIState = RCC_HSI_DIV1;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.HSI48State = RCC_HSI48_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = 4;
-  RCC_OscInitStruct.PLL.PLLN = 28;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLM = 2;
+  RCC_OscInitStruct.PLL.PLLN = 36;
   RCC_OscInitStruct.PLL.PLLP = 2;
   RCC_OscInitStruct.PLL.PLLQ = 3;
   RCC_OscInitStruct.PLL.PLLR = 2;
   RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1VCIRANGE_3;
   RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1VCOWIDE;
-  RCC_OscInitStruct.PLL.PLLFRACN = 1024;
+  RCC_OscInitStruct.PLL.PLLFRACN = 0;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -360,6 +376,35 @@ void PeriphCommonClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief IWDG1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_IWDG1_Init(void)
+{
+
+  /* USER CODE BEGIN IWDG1_Init 0 */
+
+  /* USER CODE END IWDG1_Init 0 */
+
+  /* USER CODE BEGIN IWDG1_Init 1 */
+
+  /* USER CODE END IWDG1_Init 1 */
+  hiwdg1.Instance = IWDG1;
+  hiwdg1.Init.Prescaler = IWDG_PRESCALER_32;
+  hiwdg1.Init.Window = 2000;
+  hiwdg1.Init.Reload = 2000;
+  if (HAL_IWDG_Init(&hiwdg1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN IWDG1_Init 2 */
+
+  /* USER CODE END IWDG1_Init 2 */
+
 }
 
 /**
