@@ -31,10 +31,7 @@ extern osEventFlagsId_t appEventHandle;
 #define APP_EVENT_K2_CONFIRM (1U << 7)
 #define APP_EVENT_IWDG (1U << 8)
 
-#define APP_EVENT_ALL                                                          \
-  APP_EVENT_NORMAL | APP_EVENT_USB | APP_EVENT_LVGL | APP_EVENT_LWIP |         \
-      APP_EVENT_K1 | APP_EVENT_K2 | APP_EVENT_K1_CONFIRM |                     \
-      APP_EVENT_K2_CONFIRM | APP_EVENT_IWDG
+#define APP_EVENT_ALL  0xFFFFFF
 
 void run_app(const AppContext_t *context);
 void schedule_task_on_main_thread(const EventTask_t *task);

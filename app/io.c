@@ -157,6 +157,18 @@ void StartSpi2TxTask(void *argument) {
 #include "lwip/timeouts.h"
 #include "tusb.h"
 
+size_t board_usb_get_serial(uint16_t id[], size_t max_len) {
+  UNUSED(max_len);
+  const uint32_t uuid[] = {
+      HAL_GetUIDw0(),
+      HAL_GetUIDw1(),
+      HAL_GetUIDw2(),
+  };
+  assert(max_len > sizeof(uuid));
+  memcpy(id, uuid, sizeof(uuid));
+  return sizeof(uuid);
+}
+
 #define INIT_IP4(a, b, c, d) {PP_HTONL(LWIP_MAKEU32(a, b, c, d))}
 
 /* lwip context */

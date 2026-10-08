@@ -10,7 +10,6 @@
 #include "tusb.h"
 
 #include "cmsis_os2.h"
-#include "stm32h7xx_hal_gpio.h"
 
 #include <assert.h>
 #include <stdlib.h>
@@ -18,11 +17,15 @@
 
 extern IWDG_HandleTypeDef hiwdg1;
 
-static mContext_t *new_context() {
-  return (mContext_t *)malloc(sizeof(mContext_t));
+static mContext_t *new_context(void *ctx) {
+  osMemoryPoolId_t context_mem_pool = (osMemoryPoolId_t)ctx;
+  return (mContext_t *)osMemoryPoolAlloc(context_mem_pool, 0U);
 }
 
-static void delete_context(mContext_t *context) { free(context); }
+static void delete_context(void *ctx, mContext_t *context) {
+  osMemoryPoolId_t context_mem_pool = (osMemoryPoolId_t)ctx;
+  osMemoryPoolFree(context_mem_pool, context);
+}
 
 static void on_widget_error(const char *reason) {
   UNUSED(reason);
@@ -32,10 +35,17 @@ static void on_widget_error(const char *reason) {
 void run_app(const AppContext_t *context) {
   init_io();
 
-  mContext_t widget_context = {0};
+  osMemoryPoolId_t context_mem_pool =
+      osMemoryPoolNew(64, sizeof(mContext_t), NULL);
+  assert(context_mem_pool != NULL);
+
+  mContext_t *widget_context = osMemoryPoolAlloc(context_mem_pool, 0U);
+  assert(widget_context != NULL);
+  memset(widget_context, 0, sizeof(*widget_context));
+
   const mWidget_t main_widget = {.class = &MainWidgetClass, .data = NULL};
-  m_attach(&widget_context, &main_widget, &new_context, &delete_context,
-           &on_widget_error);
+  m_attach(widget_context, &main_widget, context_mem_pool, &new_context,
+           &delete_context, &on_widget_error);
 
   uint32_t flags;
   EventTask_t task;
@@ -90,32 +100,23 @@ void run_app(const AppContext_t *context) {
       }
     }
     for (; osMessageQueueGetCount(defaultQueueHandle) != 0;) {
+      status = osMessageQueueGet(defaultQueueHandle, &task, NULL, 0);
+      if (likely(status == osOK)) {
+        task.callback(task.context);
+      }
       flags =
           osEventFlagsWait(appEventHandle, APP_EVENT_ALL, osFlagsNoClear, 0);
       if ((flags & osFlagsError) == 0 && flags != 0) {
         break;
       }
-      status = osMessageQueueGet(defaultQueueHandle, &task, NULL, 0);
-      if (likely(status == osOK)) {
-        task.callback(task.context);
-      }
     }
   }
 
-  m_detach(&widget_context);
-  deinit_io();
-}
+  m_detach(widget_context);
+  osMemoryPoolFree(context_mem_pool, widget_context);
+  osMemoryPoolDelete(context_mem_pool);
 
-size_t board_usb_get_serial(uint16_t id[], size_t max_len) {
-  UNUSED(max_len);
-  uint32_t uuid[] = {
-      HAL_GetUIDw0(),
-      HAL_GetUIDw1(),
-      HAL_GetUIDw2(),
-  };
-  assert(max_len > sizeof(uuid));
-  memcpy(id, uuid, sizeof(uuid));
-  return sizeof(uuid);
+  deinit_io();
 }
 
 void schedule_task_on_main_thread(const EventTask_t *task) {
