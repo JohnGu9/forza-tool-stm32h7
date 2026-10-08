@@ -10,3 +10,6 @@
 [submodule "app/CC"]
 	path = app/CC
 	url = https://github.com/JacksonAllan/CC.git
+[submodule "app/mf"]
+	path = app/mf
+	url = https://github.com/JohnGu9/mf.git
