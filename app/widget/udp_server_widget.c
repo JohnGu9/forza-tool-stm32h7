@@ -1,3 +1,4 @@
+#include "common.h"
 #include "widgets.h"
 
 #include "mf.h"
@@ -15,10 +16,12 @@ typedef struct {
 
 static void udp_recv_proc(void *arg, struct udp_pcb *upcb, struct pbuf *p,
                           const ip_addr_t *addr, u16_t port) {
-  UdpServerWidgetState_t *state = (UdpServerWidgetState_t *)arg;
-  const DataRecvTask_t *recv_task = state->recv_task;
-  recv_task->callback(recv_task->context, p);
-  pbuf_free(p);
+  if (likely(p != NULL)) {
+    UdpServerWidgetState_t *state = (UdpServerWidgetState_t *)arg;
+    const DataRecvTask_t *recv_task = state->recv_task;
+    recv_task->callback(recv_task->context, p);
+    pbuf_free(p);
+  }
 }
 
 static UdpServerWidgetState_t state = {0};
@@ -29,7 +32,6 @@ static void *init_state(mContext_t *context) {
       (const DataRecvTask_t *)m_get_widget_data(context);
   state.recv_task = recv_task;
 
-  udp_init();
   struct udp_pcb *pcb = udp_new();
   assert(pcb != NULL);
   err_t err = udp_bind(pcb, IP_ADDR_ANY, 5400);
@@ -57,5 +59,6 @@ static void dispose(mContext_t *context) {
 const mWidgetClass_t UdpServerWidgetClass = {
     .init_state = &init_state,
     .build = &build,
+    .should_rebuild = m_always_rebuild,
     .dispose = &dispose,
 };

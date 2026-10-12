@@ -286,7 +286,8 @@ static void on_k1(void *context) {
   m_set_state(state->context);
 }
 
-static void build_children(LinkUpWidgetState_t *const state) {
+static void
+build_animated_transition_widget_children(LinkUpWidgetState_t *const state) {
   uint32_t key =
       (uint32_t)(state->refresh_key) << 16 | (uint16_t)(state->child_type_key);
   switch (state->child_type_key) {
@@ -382,7 +383,6 @@ static void *init_state(mContext_t *context) {
 
   state.refresh_key = 0;
   state.child_type_key = ChildType_Tachometer;
-  build_children(&state);
 
   return &state;
 }
@@ -396,8 +396,13 @@ static void build(mContext_t *context, mWidget_t children[MF_MAX_CHILDREN]) {
       .data = &state->recv_task,
   };
 
-  build_children(state);
   children[1] = (mWidget_t){
+      .class = data->is_link_state_up ? &HttpServerWidgetClass : NULL,
+      .data = &state->recv_task,
+  };
+
+  build_animated_transition_widget_children(state);
+  children[2] = (mWidget_t){
       .class = &AnimatedTransitionWidgetClass,
       .data = &state->animated_transition_widget_data,
   };
@@ -422,6 +427,7 @@ static void dispose(mContext_t *context) {
 const mWidgetClass_t LinkUpWidgetClass = {
     .init_state = &init_state,
     .build = &build,
+    .should_rebuild = m_always_rebuild,
     .dispose = &dispose,
 };
 

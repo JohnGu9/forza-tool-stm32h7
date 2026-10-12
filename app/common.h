@@ -1,7 +1,11 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#define CC_REALLOC our_realloc
+#define CC_FREE our_free
 #include "cc.h"
+
+#include "FreeRTOS.h"
 
 #include <assert.h>
 #include <stddef.h>
@@ -14,6 +18,9 @@ extern "C" {
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
+void *our_realloc(void *ptr, size_t size);
+void our_free(void *ptr);
+
 typedef struct {
   void *context;
   void (*callback)(void *context);
@@ -24,10 +31,10 @@ int32_t add_task(EventTaskSet_t *set, EventTask_t *task);
 int32_t remove_task(EventTaskSet_t *set, EventTask_t *task);
 void invoke_tasks(EventTaskSet_t *set);
 
-#define new_object(T) (T *)calloc(1, sizeof(T))
-#define delete_object(obj) free(obj)
+#define new_object(T) (T *)pvPortMalloc(sizeof(T))
+#define delete_object(obj) vPortFree(obj)
 
-#define likely(x)   __builtin_expect(!!(x), 1)
+#define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
 
 #define STRUCT_PACK __attribute__((__packed__))

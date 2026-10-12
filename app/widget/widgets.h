@@ -15,6 +15,8 @@ extern const mWidgetClass_t LinkUpWidgetClass;
 
 extern const mWidgetClass_t UdpServerWidgetClass;
 
+extern const mWidgetClass_t HttpServerWidgetClass;
+
 extern const mWidgetClass_t TachometerWidgetClass;
 
 extern const mWidgetClass_t TachometerLedControllerWidgetClass;

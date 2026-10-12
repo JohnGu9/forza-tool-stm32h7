@@ -127,5 +127,6 @@ static void dispose(mContext_t *context) {
 const mWidgetClass_t AnimatedTransitionWidgetClass = {
     .init_state = &init_state,
     .build = &build,
+    .should_rebuild = m_always_rebuild,
     .dispose = &dispose,
 };
